@@ -1,3 +1,8 @@
+#python -m venv ./venv
+#pip freeze > requirements.txt
+#pip install -r requirements.txt
+#streamlit run app.py
+
 import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
@@ -9,13 +14,40 @@ from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from htmlTemplates import css, bot_template, user_template
 from langchain.llms import HuggingFaceHub
+from pptx import Presentation
+import docx
 
-def get_pdf_text(pdf_docs):
+def get_txt_text(txt_file):
+    with open(txt_file, 'r', encoding='utf-8') as file:
+        text = file.read()
+    return text
+
+def get_doc_text(doc_file):
+    doc = docx.Document(doc_file)
     text = ""
-    for pdf in pdf_docs:
-        pdf_reader = PdfReader(pdf)
-        for page in pdf_reader.pages:
-            text += page.extract_text()
+    
+    for paragraph in doc.paragraphs:
+        text += paragraph.text + "\n"
+        
+    return text
+
+def get_ppt_text(ppt_file):
+    prs = Presentation(ppt_file)
+    text = ""
+
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for paragraph in shape.text_frame.paragraphs:
+                    for run in paragraph.runs:
+                        text += run.text
+
+    return text
+def get_pdf_text(pdf_doc):
+    text = ""
+    pdf_reader = PdfReader(pdf_doc)
+    for page in pdf_reader.pages:
+        text += page.extract_text()
     return text
 
 
@@ -82,12 +114,26 @@ def main():
 
     with st.sidebar:
         st.subheader("Your documents")
-        pdf_docs = st.file_uploader(
+        all_files = st.file_uploader(
             "Upload your PDFs here and click on 'Process'", accept_multiple_files=True)
         if st.button("Process"):
             with st.spinner("Processing"):
-                # get pdf text
-                raw_text = get_pdf_text(pdf_docs)
+                raw_text = ""
+                for file in all_files:
+                    file_extension = file.name.rsplit('.', 1)[-1]
+                    full_file_with_path = "./files/" + file.name
+                    if file_extension == 'txt':
+                        raw_text = get_txt_text(full_file_with_path)
+                    elif file_extension == 'docx':
+                        raw_text = get_doc_text(full_file_with_path)
+                    elif file_extension == 'pptx':
+                        raw_text = get_ppt_text(full_file_with_path)
+                    elif file_extension == 'pdf':
+                        raw_text = get_pdf_text(full_file_with_path)
+                    else:
+                        st.error(
+                            "Please upload a file with one of the following extensions: txt, docx, pptx, pdf")
+                        break
 
                 # get the text chunks
                 text_chunks = get_text_chunks(raw_text)
